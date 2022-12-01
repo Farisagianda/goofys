@@ -1046,7 +1046,7 @@ func (fs *Goofys) MkDir(
 	fs.mu.RUnlock()
 
 	// ignore op.Mode for now
-	inode, err := parent.MkDir(op.Name)
+	inode, err := parent.MkDirAll(op.Name)
 	if err != nil {
 		return err
 	}
