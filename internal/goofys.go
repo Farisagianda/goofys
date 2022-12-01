@@ -1038,31 +1038,33 @@ func (fs *Goofys) CreateFile(
 }
 
 func (fs *Goofys) MkDir(
-	ctx context.Context,
+        ctx context.Context,
 	op *fuseops.MkDirOp) (err error) {
-
-	fs.mu.RLock()
-	parent := fs.getInodeOrDie(op.Parent)
-	fs.mu.RUnlock()
-
-	// ignore op.Mode for now
-	inode, err := parent.MkDirAll(op.Name)
-	if err != nil {
-		return err
-	}
-
-	parent.mu.Lock()
-
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
-	fs.insertInode(parent, inode)
 
-	parent.mu.Unlock()
+	// Make sure the parent exists and has not been forgotten.
+	_ = fs.findInodeByID(op.Parent)
 
-	op.Entry.Child = inode.Id
-	op.Entry.Attributes = inode.InflateAttributes()
-	op.Entry.AttributesExpiration = time.Now().Add(fs.flags.StatCacheTTL)
-	op.Entry.EntryExpiration = time.Now().Add(fs.flags.TypeCacheTTL)
+	// Mint a child inode.
+	childID := fs.nextInodeID
+	fs.nextInodeID++
+
+	child := &inode{
+		attributes: fuseops.InodeAttributes{
+			Nlink: 0,
+			Mode:  0777 | os.ModeDir,
+		},
+	}
+
+	fs.inodes[childID] = child
+	child.IncrementLookupCount()
+
+	// Return an appropriate entry.
+	op.Entry = fuseops.ChildInodeEntry{
+		Child:      childID,
+		Attributes: child.attributes,
+	}
 
 	return
 }
